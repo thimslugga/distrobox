@@ -113,29 +113,30 @@ fi
 
 ## Get crun ###################################################################
 
-CRUN_VERSION="1.8.3"
+CRUN_VERSION="1.8.5"
 printf >&2 "\033[1;31m Fetching crun %s...\n\033[0m" "${CRUN_VERSION}"
 # Download the binary to /tmp
-curl -L \
+curl -sL \
 	"https://github.com/containers/crun/releases/download/${CRUN_VERSION}/crun-${CRUN_VERSION}-linux-amd64" \
 	-o "/tmp/crun"
-chmod +x /tmp/crun
+chmod u+x /tmp/crun
 
 ###############################################################################
 
-## Get podman ###################################################################
+## Get Podman ###################################################################
 
-PODMAN_VERSION="4.4.3"
+PODMAN_VERSION="4.5.1"
 printf >&2 "\033[1;31m Fetching podman %s...\n\033[0m" "${PODMAN_VERSION}"
 # Using static podman builds semplifies our lives! Thanks to the wonderful project
 #   https://github.com/mgoltzsche/podman-static
 # All credits to @mgoltzsche for the builds.
 # Download and unpack the tar in /tmp
-curl -L \
+curl -sL \
 	"https://github.com/mgoltzsche/podman-static/releases/download/v${PODMAN_VERSION}/podman-linux-amd64.tar.gz" \
 	-o /tmp/podman-linux-amd64.tar.gz
 printf >&2 "\033[1;31m Unpacking Podman...\n\033[0m"
-tar xf /tmp/podman-linux-amd64.tar.gz -C /tmp/
+test -f /tmp/podman-linux-amd64.tar.gz \
+	&& tar xf /tmp/podman-linux-amd64.tar.gz -C /tmp/
 
 ###############################################################################
 
@@ -148,9 +149,9 @@ cp -r /tmp/podman-linux-amd64/etc/containers "${conf_path}"
 mv /tmp/crun "${dest_path}/bin/crun"
 
 printf >&2 "\033[1;31m Configuring...\n\033[0m"
-# We need to tell podman to use those costom directories in order to make
-# it work from custom directories
-cat << EOF > "${conf_path}/containers/containers.conf"
+# We need to tell podman to use those custom directories in order to make
+# it work from custom directories.
+cat <<EOF > "${conf_path}/containers/containers.conf"
 # See https://github.com/containers/common/blob/master/pkg/config/containers.conf
 [engine]
 infra_image="k8s.gcr.io/pause:3.8"
@@ -173,17 +174,16 @@ runc = [ "${dest_path}/bin/runc" ]
 cni_plugin_dirs = [ "${dest_path}/lib/cni" ]
 EOF
 
-# Same for mouning programs
+# Same for mounting programs
 sed -i "s|/var|${dest_path}|g" "${conf_path}/containers/storage.conf"
 sed -i "s|mount_program =.*|mount_program = \"${dest_path}/bin/fuse-overlayfs\"|g" \
 	"${conf_path}/containers/storage.conf"
 
-printf >&2 "\033[1;31m Cleaning up...\n\033[0m"
 # Cleanup
+printf >&2 "\033[1;31m Cleaning up...\n\033[0m"
 rm -rf /tmp/podman-linux-amd64/ /tmp/podman-linux-amd64.tar.gz /tmp/crun
 
 printf >&2 "\033[1;31m Migrating...\n\033[0m"
-
 "${dest_path}/bin/podman" system migrate
 
 printf >&2 "Successfully installed to %s.\n" "${dest_path}"
